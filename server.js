@@ -20,9 +20,9 @@ const port = 3000;
 const { ScanFiles, bigImage } = require("./scriptInProgress");
 
 io.on('connection', (sock) => {
-  console.log('a user connected');
+  console.log('SERVER a user connected');
    sock.on('myEvent', (someData) => {
-     console.log('event from UI', someData)
+     console.log('SERVER event from UI came', someData)
      sock.emit('serverEvent', someData)
    })
   sock.on('startScript', async data => {
@@ -30,25 +30,26 @@ io.on('connection', (sock) => {
     try {
       sock.emit('scriptRunning', true)
       // take paths for save images and take models
-      const { modelPath, imagePath, smallPreview, softScan = false, hardScan = false } = data
-  
-      console.log("Received modelPath: step1", modelPath);
-      console.log("Received imagePath: step1", imagePath);
-      //res.json(req.body);
-      const cachePath = imagePath + '/scan.json'
-      let cache = null
+      const { modelPath, imagePath, smallPreview, titleText, softScan = false, hardScan = true } = data
+      console.log("SERVER Received modelPath: step1", modelPath);
+      console.log("SERVER Received imagePath: step1", imagePath);
+ 
+      const cachePath = imagePath + '/scan.json';
+      console.log(cachePath, 'SERVER !!')
+      let cache = null;
 
       if (fs.existsSync(cachePath)) {
         try {
           cache = JSON.parse(fs.readFileSync(cachePath).toString())
         } catch (err) {
-          console.log('reading cache error!', cachePath, err)
+          console.log('SERVER reading cache error!', cachePath, err)
           cache = null
         }
       }
-
-      if (!softScan && !hardScan && cache) {
-        const recached = []
+ 
+     
+      const recached = []
+      if (cache) {
         for (let i = 0; i < cache.length; i++) {
           const img = await jimp.read(cache[i].path)
           const img64 = await img.getBase64Async(jimp.MIME_PNG)
@@ -58,28 +59,45 @@ io.on('connection', (sock) => {
             image: img64
           })
         }
-        sock.emit('scriptCache', recached)
+      }
+      if (!softScan && !hardScan && cache) {
+        sock.emit('modelsList', recached)
         sock.emit('scriptRunning', false)
         return
       }
 
-      const modelsList =  await ScanFiles (modelPath) 
-      console.log(modelsList, "step 1, models recieved")
+     // добавление scan.json в исключения
+     const excluded = [...(softScan && cache ? cache.map(el => el.model) : []), 'scan.json'];
 
-      sock.emit('modelsList', modelsList)
-      console.log('here is emit cached in Script')
+      const modelsList =  await ScanFiles (modelPath, excluded) 
+      console.log(modelsList, "SERVER models recieved, SCANFILE func going...")
+
+      sock.emit('modelsList', [...recached, ...modelsList])
+      console.log('SERVER here is emit cached in Script')
   
       // BIG OR SMALL PREVIEW?
-      console.log('step2, open browser')
-      const completeList = await bigImage(modelsList, imagePath, smallPreview, sock)
+      console.log('SERVER open browser')
+      const completeList = await bigImage(modelsList, imagePath, smallPreview, titleText, sock)
 
-      fs.writeFileSync(cachePath, JSON.stringify(completeList))
-
+      // JSON writing
+      let old = null
+      try { 
+        old = JSON.parse(fs.readFileSync(cachePath).toString())
+        console.log(old, completeList, "!!!!!????!!!!!")
+      } 
+      catch(e) { 
+        old = null
+      }
+      
+      old = [...(old || []), ...completeList]
+      fs.writeFileSync(cachePath, JSON.stringify(old))
+      console.log('SERVER ..wwait writing to json..')
       sock.emit('scriptRunning', false)
     } catch (err) {
       console.error(err);
       //res.status(500).send("Can't make preview");
     }
+    console.log('SERVER FINISH')
   })
 });
 
