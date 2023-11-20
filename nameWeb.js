@@ -73,7 +73,7 @@ const pathOnPc = "D:/Ira/models";
 
         console.log(newName, 'step2, got names of images');
 
-        // make correct name inside saving folder 
+        // make correct name inside saving foldCacheer 
         const imagePath = pathForSaveImage + '/' + newName[0];
     
         // save image to correct path (imagePat)

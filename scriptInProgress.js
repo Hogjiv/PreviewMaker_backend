@@ -1,3 +1,176 @@
+/* const puppeteer = require("puppeteer");
+const jimp = require("jimp");
+
+const fs = require("fs");
+const { readdir } = require("fs/promises");
+const axios = require("axios");
+
+async function ScanFiles(modelPath, excluded = []) {
+  let files = [];
+  try {
+    files = await readdir(modelPath);
+
+    // Use a Set to keep track of unique file names
+    const uniqueFiles = []; 
+    const replacedFiles = files
+
+   
+    files.map((file) =>
+        file
+          .replace(/[-(].*|\s+$/gi, "") 
+          .replace(/\.(rar|zip|jpeg|png|jpg)$/i, "")
+          .trim() 
+          )
+       
+      .filter((file) => {
+        if (excluded.includes(file)) {
+          return false;
+        }
+        if (uniqueFiles.includes(file)) {
+          return false;
+        }
+     
+     
+        uniqueFiles.push(file);
+        return true;
+      });  
+      console.log(files, file)
+           // const jpgFiles = files.filter((file) => file.match(/\.(jpg|png|jpeg)$/gi))  
+      // console.log (jpgFiles, "!!!!!!!!!!! все файлы с куартинками !!!!!!!!!")
+
+      //const isImg = /\.(jpg|png|jpeg)$/gm
+   // if (jpgFiles.includes(file)) {
+        //   return false;
+        // }
+
+    // const modelCounter = replacedFiles.length;
+    // console.log(modelCounter);
+
+    //console.log(replacedFiles, "SCRIPTINPROGRESS total read" + modelCounter);
+    return replacedFiles;
+  } catch (err) {
+    throw err;
+  }
+}
+
+async function bigImage(modelName, imagePath, titleText, smallPreview, socket) {
+  try {
+    const result = [];
+
+    const browser = await puppeteer.launch({
+      headless: false,
+      defaultViewport: null,
+      userDataDir: "./tmp",
+    });
+    console.log(modelName, "SCRIPTINPROGRESS model names");
+    const page = await browser.newPage();
+
+    for (const model of modelName) {
+      await page.goto(
+        `https://3ddd.ru/3dmodels?query=${encodeURIComponent(
+          model
+        )}&order=relevance`,
+        { waitUntil: "load", timeout: 10000 }
+      );
+      const pageUrl = page.url();
+
+      console.log("SCRIPTINPROGRESS Current page URL:", pageUrl);
+
+      try {
+        await page.waitForSelector(".model-image ", { timeout: 30000 });
+      } catch (err) {
+        continue;
+      }
+      await page.waitForTimeout(5000);
+
+      const linkHref = await page.evaluate(() => {
+        const linkElement = document.querySelector(".model-image a");
+        if (linkElement) {
+          return linkElement.href;
+        } else {
+          return;
+        }
+      });
+      // waiting load page
+      await page.waitForTimeout(3000);
+
+      // go to page with image
+      if (linkHref) {
+        try {
+          await page.goto(linkHref, { waitUntil: "load", timeout: 0 });
+          //console.log("step4, page opened");
+        } catch (error) {
+          console.error("Error occurred during page navigation:", error);
+          
+          continue;
+        }
+      }
+      await page.waitForTimeout(3000);
+      // !!!???
+      // Переходим на страницу с полученной ссылкой
+
+      // открываем большую картинку
+      const imageElement = await page.$(".big-view img");
+      if (imageElement) {
+        const imageUrl = await page.$eval(".big-view img", (img) => img.src);
+
+        // other info ...
+        //Search title name
+        const titleElement = await page.waitForSelector(".title");
+        const titleText = await page.evaluate(
+          (element) => element.textContent,
+          titleElement
+        );
+
+        // make rule for create new image name
+        const rxName = /\/(\d+\.[a-zA-Z0-9]+)/;
+
+        const imageNames = imageUrl.match(rxName)[1];
+        const imageName = imageNames;
+        const newImagePath = `${imagePath}/${imageName}.jpeg`;
+
+        try {
+          const response = await axios.get(imageUrl, {
+            responseType: "arraybuffer",
+            timeout: 30000,
+          });
+          const imageBinaryData = response.data;
+          //make small img
+          const compressedImage = await jimp.read(imageBinaryData);
+          if (smallPreview) {
+            compressedImage.scale(0.5, jimp.RESIZE_BEZIER);
+          }
+          await compressedImage.writeAsync(newImagePath);
+          const img64 = await compressedImage.getBase64Async(jimp.MIME_PNG);
+          socket.emit("modelImage", {
+            modelName: model,
+            title: titleText,
+            image: img64,
+          });
+          result.push({
+            model,
+            title: titleText,
+            path: newImagePath,
+          });
+        } catch (error) {
+          console.error("Error saving image:", error);
+        }
+      } else {
+      }
+      socket.emit("modelSaved", model);
+    }
+    await browser.close();
+
+    console.log("SCRIPTINPROGRESS Big previews done! open2");
+    return result;
+  } catch (error) {
+    console.error("Error in bigImage function:", error);
+    return [];
+  }
+}
+module.exports = { ScanFiles, bigImage };
+*/
+
 const puppeteer = require("puppeteer");
 const jimp = require("jimp");
 
@@ -14,10 +187,11 @@ async function ScanFiles(modelPath, excluded = []) {
     // Use a Set to keep track of unique file names
     const uniqueFiles = [];
 
-    const replacedFiles = files       
+    const replacedFiles = files
+    .filter(file => !(file.endsWith('.jpg') || file.endsWith('.jpeg') || file.endsWith('.png')) )       
     //.map((file) => file.replace(/[-()]|\.(rar|zip|jpeg|png|jpg)$/gi, ""))
     //.map((file) => file.replace(/[-(].*?\)| - .*?|\s+$/gi, "").trim().replace(/\.(rar|zip|jpeg|png|jpg)$/i, ""))
-    .map((file) => file.replace(/[-(].*|\s+$/gi, "").replace(/\.(rar|zip|jpeg|png|jpg)$/i, "").trim())
+    .map((file) => file.replace(/[-(].*|\s+$/gi, "").replace(/\.(rar|zip)$/i, "").trim())
       .filter((file) => {
         if (excluded.includes(file)) {
           return false;
@@ -29,6 +203,12 @@ async function ScanFiles(modelPath, excluded = []) {
         uniqueFiles.push(file); 
         return true; 
       })
+
+        // const isImg = /\.(jpg|png|jpeg)$/gm
+        //   if (jpgFiles.includes(file)) {
+        //     return false;
+        //   }
+
     //console.log(replacedFiles, "clean zip/rar");
     const modelCounter = replacedFiles.length;
     //console.log(modelCounter);
@@ -42,7 +222,7 @@ async function ScanFiles(modelPath, excluded = []) {
 }
 // https://3ddd.ru/3dmodels?query=2438678.5cd5de4309d4f&order=relevance
  
-async function bigImage(modelName, imagePath, titleText, smallPreview,  socket) {
+async function bigImage(modelName, imagePath, smallPreview,  socket) {
   const result = []
 
   const browser = await puppeteer.launch({
@@ -169,81 +349,4 @@ async function bigImage(modelName, imagePath, titleText, smallPreview,  socket) 
   console.log("SCRIPTINPROGRESS Big previews done! open2");
   return result
 }
-
-
-
-
-// async function smallImage(modelName, imagePath, socket) {
-//   const browser = await puppeteer.launch({
-//     headless: false,
-//     defaultViewport: null,
-//     userDataDir: "./tmp",
-//   });
-//   const page = await browser.newPage();
-//   await page.goto("https://3ddd.ru/", { waitUntil: "load", timeout: 0 });
-//   await page.waitForSelector("#query_search", { timeout: 7000 });
-//   console.log("first value");
-
-//   for (const model of modelName) {
-//     console.log(model, "got name of model");
-
-//     // print by letters slowly (delay 100)
-//     for (const character of model) {
-//       await page.type("#query_search", character);
-//       await page.waitForTimeout(100);
-//     }
-//     // put value inside searchbar
-//     console.log('step2, printing')
-//     console.log("problem?")
-//     await page.keyboard.press("Enter");
-//     await page.waitForSelector(".link", { timeout: 10000 });
-
-//     // if any errors, continue run script
-//     try {
-//       await page.waitForSelector(".link", { timeout: 10000 });
-//     } catch (err) {
-//       await page.$eval("#query_search", (input) => (input.value = ""));
-//       console.log("problem2?")
-//       continue;
-//     }
-   
-//     // MAKE SMALL PREVIEW working
-//     // find correct css class in 3ddd for small image
-//     const imageUrl = await page.$eval(".link img", (img) => img.src);
-
-//     console.log(imageUrl, "step1");
-
-//     // make rule for create new image name
-//     const rxName = /[^/]+$/;
-//     const imageNames = imageUrl.split(",");
-
-//     // make cycle for image name according regEx.
-//     for (const imageName of imageNames) {
-//       const newName = imageName.match(rxName);
-
-//       console.log(newName, "step2, got names of images");
-
-//       // make correct name inside saving folder
-//       const newImagePath = imagePath + "/" + newName[0];
-
-//       // save image to correct path (imagePat)
-//       try {
-//         const response = await axios.get(imageName, {
-//           responseType: "arraybuffer",
-//         });
-//         fs.writeFileSync(newImagePath, response.data);
-//         console.log("Image saved successfully.");
-//       } catch (error) {
-//         console.error("Error saving image:", error);
-//       }
-//     }
-
-//     // clear search string
-//     await page.$eval("#query_search", (input) => (input.value = ""));
-//     console.log("the string is empty");
-//   }
-//   await browser.close();
-//   console.log("Done!");
-// }
-
 module.exports = { ScanFiles,    bigImage };
